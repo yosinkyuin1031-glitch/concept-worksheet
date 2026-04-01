@@ -1,65 +1,305 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { steps, type Step, type Field } from './data'
+
+const STORAGE_KEY = 'concept-worksheet-data'
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+  const [currentStep, setCurrentStep] = useState<number | null>(null)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) setAnswers(JSON.parse(saved))
+    } catch {}
+    setLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    if (loaded) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(answers))
+    }
+  }, [answers, loaded])
+
+  const updateAnswer = useCallback((fieldId: string, value: string) => {
+    setAnswers(prev => ({ ...prev, [fieldId]: value }))
+  }, [])
+
+  const getStepProgress = useCallback((step: Step) => {
+    const filled = step.fields.filter(f => (answers[f.id] || '').trim().length > 0).length
+    return { filled, total: step.fields.length, percent: step.fields.length > 0 ? Math.round((filled / step.fields.length) * 100) : 0 }
+  }, [answers])
+
+  const getTotalProgress = useCallback(() => {
+    const allFields = steps.flatMap(s => s.fields)
+    const filled = allFields.filter(f => (answers[f.id] || '').trim().length > 0).length
+    return { filled, total: allFields.length, percent: allFields.length > 0 ? Math.round((filled / allFields.length) * 100) : 0 }
+  }, [answers])
+
+  const activeStep = currentStep !== null ? steps[currentStep] : null
+
+  // トップ画面（ステップ一覧）
+  if (currentStep === null) {
+    const total = getTotalProgress()
+
+    return (
+      <div className="min-h-screen flex flex-col">
+        <header className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+          <div className="max-w-2xl mx-auto px-4 py-10 md:py-14 text-center">
+            <p className="text-xs text-slate-400 tracking-widest uppercase mb-3">for 治療家・セラピスト</p>
+            <h1 className="text-2xl md:text-3xl font-bold leading-tight">商品コンセプト設計<br />ワークシート</h1>
+            <p className="text-slate-400 text-sm mt-3 leading-relaxed">9つのステップで、あなたの院だけの<br />「選ばれる商品」を設計する</p>
+          </div>
+        </header>
+
+        <main className="max-w-2xl mx-auto px-4 py-8 flex-1 w-full">
+          {/* 全体の進捗 */}
+          {total.filled > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6 text-center">
+              <p className="text-xs text-gray-400 mb-1">全体の記入率</p>
+              <p className="text-3xl font-bold text-gray-900">{total.percent}<span className="text-lg text-gray-400">%</span></p>
+              <p className="text-xs text-gray-400 mt-1">{total.filled} / {total.total} 項目を記入済み</p>
+              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mt-3">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-slate-600 to-slate-900 transition-all duration-500"
+                  style={{ width: `${total.percent}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          <p className="text-sm text-gray-500 mb-6 text-center">
+            {total.filled === 0 ? 'Step 1から順番に進めていきましょう' : '途中からでも再開できます'}
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+          {/* ステップ一覧 */}
+          <div className="space-y-3">
+            {steps.map((step, index) => {
+              const progress = getStepProgress(step)
+              return (
+                <button
+                  key={step.id}
+                  onClick={() => { setCurrentStep(index); window.scrollTo({ top: 0 }) }}
+                  className="w-full text-left bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-all active:scale-[0.99]"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
+                      progress.percent === 100
+                        ? 'bg-green-100 text-green-700'
+                        : progress.filled > 0
+                          ? 'bg-slate-100 text-slate-700'
+                          : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      {progress.percent === 100 ? (
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : step.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-gray-400">STEP {step.number}</p>
+                        {progress.filled > 0 && progress.percent < 100 && (
+                          <span className="text-[10px] text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded">{progress.filled}/{progress.total}</span>
+                        )}
+                      </div>
+                      <p className="font-bold text-gray-900 text-sm">{step.title}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{step.subtitle}</p>
+                    </div>
+                    <span className="text-gray-300 shrink-0">→</span>
+                  </div>
+                  {progress.filled > 0 && (
+                    <div className="mt-3 ml-14">
+                      <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            progress.percent === 100 ? 'bg-green-500' : 'bg-slate-400'
+                          }`}
+                          style={{ width: `${progress.percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* リセットボタン */}
+          {total.filled > 0 && (
+            <div className="mt-8 text-center">
+              <button
+                onClick={() => {
+                  if (confirm('すべての記入内容をリセットしますか？この操作は取り消せません。')) {
+                    setAnswers({})
+                    localStorage.removeItem(STORAGE_KEY)
+                  }
+                }}
+                className="text-xs text-gray-300 hover:text-red-400 transition-colors"
+              >
+                すべてリセット
+              </button>
+            </div>
+          )}
+        </main>
+
+        <footer className="mt-auto border-t border-gray-200 bg-white py-6 text-center">
+          <p className="text-[10px] text-gray-300">Powered by 大口神経整体院</p>
+        </footer>
+      </div>
+    )
+  }
+
+  // ワークシート記入画面
+  if (!activeStep) return null
+
+  const progress = getStepProgress(activeStep)
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* ヘッダー */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setCurrentStep(null)}
+              className="text-gray-400 hover:text-gray-600 transition-colors text-sm"
+            >
+              ← 一覧
+            </button>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-400">STEP {activeStep.number}/9</span>
+              <span className="text-xs font-bold text-slate-600">{progress.filled}/{progress.total}</span>
+            </div>
+          </div>
+          <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden mt-2">
+            <div
+              className="h-full rounded-full bg-slate-700 transition-all duration-500"
+              style={{ width: `${progress.percent}%` }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-2xl mx-auto px-4 py-6 flex-1 w-full">
+        {/* ステップ概要 */}
+        <div className="mb-6">
+          <p className="text-xs text-slate-500 font-bold mb-1">STEP {activeStep.number}</p>
+          <h1 className="text-xl font-bold text-gray-900">{activeStep.title}</h1>
+          <p className="text-sm text-gray-500 mt-1">{activeStep.subtitle}</p>
+          <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-4">
+            <p className="text-xs text-slate-600 leading-relaxed">{activeStep.description}</p>
+          </div>
+        </div>
+
+        {/* フィールド */}
+        <div className="space-y-5">
+          {activeStep.fields.map(field => (
+            <FieldInput
+              key={field.id}
+              field={field}
+              value={answers[field.id] || ''}
+              onChange={(val) => updateAnswer(field.id, val)}
+            />
+          ))}
+        </div>
+
+        {/* ナビゲーション */}
+        <div className="flex gap-3 mt-8 mb-4">
+          {currentStep > 0 && (
+            <button
+              onClick={() => { setCurrentStep(currentStep - 1); window.scrollTo({ top: 0 }) }}
+              className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors"
+            >
+              ← 前のステップ
+            </button>
+          )}
+          {currentStep < steps.length - 1 ? (
+            <button
+              onClick={() => { setCurrentStep(currentStep + 1); window.scrollTo({ top: 0 }) }}
+              className="flex-1 py-3 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-colors"
+            >
+              次のステップ →
+            </button>
+          ) : (
+            <button
+              onClick={() => { setCurrentStep(null); window.scrollTo({ top: 0 }) }}
+              className="flex-1 py-3 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-colors"
+            >
+              完了して一覧に戻る
+            </button>
+          )}
         </div>
       </main>
+
+      <footer className="mt-auto border-t border-gray-200 bg-white py-6 text-center">
+        <p className="text-[10px] text-gray-300">Powered by 大口神経整体院</p>
+      </footer>
     </div>
-  );
+  )
+}
+
+function FieldInput({ field, value, onChange }: { field: Field; value: string; onChange: (val: string) => void }) {
+  const isFilled = value.trim().length > 0
+  const baseInput = "w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-colors"
+
+  return (
+    <div>
+      <div className="flex items-start gap-2 mb-2">
+        <div className={`w-4 h-4 rounded border-2 mt-0.5 shrink-0 flex items-center justify-center transition-colors ${
+          isFilled ? 'bg-green-500 border-green-500' : 'border-gray-300'
+        }`}>
+          {isFilled && (
+            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+        <label className="text-sm font-medium text-gray-900">{field.label}</label>
+      </div>
+      {field.hint && <p className="text-xs text-gray-400 mb-2 ml-6">{field.hint}</p>}
+
+      <div className="ml-6">
+        {field.type === 'textarea' ? (
+          <textarea
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className={`${baseInput} ${isFilled ? 'border-green-200 bg-green-50/30' : 'border-gray-200 bg-white'}`}
+            rows={3}
+            placeholder={field.placeholder}
+          />
+        ) : field.type === 'select' ? (
+          <select
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className={`${baseInput} ${isFilled ? 'border-green-200 bg-green-50/30' : 'border-gray-200 bg-white'}`}
+          >
+            <option value="">選択してください</option>
+            {field.options?.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        ) : field.type === 'number' ? (
+          <input
+            type="number"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className={`${baseInput} ${isFilled ? 'border-green-200 bg-green-50/30' : 'border-gray-200 bg-white'}`}
+            placeholder={field.placeholder}
+          />
+        ) : (
+          <input
+            type="text"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            className={`${baseInput} ${isFilled ? 'border-green-200 bg-green-50/30' : 'border-gray-200 bg-white'}`}
+            placeholder={field.placeholder}
+          />
+        )}
+      </div>
+    </div>
+  )
 }
